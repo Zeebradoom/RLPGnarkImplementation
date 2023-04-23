@@ -1,60 +1,191 @@
 package main
 
-import ("github.com/consensys/gnark/frontend")
+import (
+    "fmt"
+"strings"
+)
 
-func encode_item(binString){
+// type Circuit struct {
+// 	Secret frontend.Variable
+// 	Hash   frontend.Variable `gnark:",public"` // struct tags default visibility is "secret"
+// }
 
-	if isinstance(input,str):
-        if len(input) == 1 and ord(input) < 0x80: return input
-        else: return encode_length(len(input), 0x80) + input
-    elif isinstance(input,list):
-        output = ''
-		for i := 0; i < len()
-        for item in input: output += encode_item(item)
-        return encode_length(len(output), 0xc0) + output
-
+func rlpSerialize(item interface{}) string {
+	switch v := item.(type) {
+	case string:
+		return serializeString(v)
+	case []interface{}:
+		return serializeList(v)
+	default:
+		panic(fmt.Sprintf("Unsupported type: %T", v))
+	}
 }
 
-func encode_length(L,offset) {
+func serializeString(input string) string {
+	inputBytes := []byte(input)
+	inputLength := len(inputBytes)
 
-	if L < 56:
-         return chr(L + offset)
-    elif L < 256**8:
-         BL = to_binary(L)
-         return chr(len(BL) + offset + 55) + BL
-    else:
-         raise Exception("input too long")
+	if inputLength == 1 && inputBytes[0] <= 0x7f {
+		return input
+	}
+
+	var result strings.Builder
+
+	if inputLength <= 55 {
+		result.WriteByte(byte(0x80 + inputLength))
+	} else {
+		lengthBytes := intToBytes(inputLength)
+		lengthBytesLength := len(lengthBytes)
+
+		result.WriteByte(byte(0xb7 + lengthBytesLength))
+		result.WriteString(string(lengthBytes))
+	}
+
+	result.WriteString(input)
+	return result.String()
+}
+
+func serializeList(items []interface{}) string {
+	serializedItems := make([]string, len(items))
+	for i, item := range items {
+		serializedItems[i] = rlpSerialize(item)
+	}
+
+	serializedList := strings.Join(serializedItems, "")
+	listLength := len(serializedList)
+
+	var result strings.Builder
+
+	if listLength <= 55 {
+		result.WriteByte(byte(0xc0 + listLength))
+	} else {
+		lengthBytes := intToBytes(listLength)
+		lengthBytesLength := len(lengthBytes)
+
+		result.WriteByte(byte(0xf7 + lengthBytesLength))
+		result.WriteString(string(lengthBytes))
+	}
+
+	result.WriteString(serializedList)
+	return result.String()
+}
+
+func intToBytes(n int) []byte {
+	var result []byte
+	for n > 0 {
+		result = append([]byte{byte(n % 256)}, result...)
+		n /= 256
+	}
+	return result
+}
+
+func rlpDecode(input string) (interface{}, error) {
+	decoded, _, err := decode([]byte(input), 0)
+	return decoded, err
+}
+
+func decode(input []byte, index int) (interface{}, int, error) {
+	if index >= len(input) {
+		return nil, index, fmt.Errorf("Unexpected end of input")
+	}
+
+	prefix := input[index]
+	index++
+
+	if prefix <= 0x7f {
+		return string([]byte{prefix}), index, nil
+	} else if prefix <= 0xb7 {
+		length := int(prefix - 0x80)
+		if index+length > len(input) {
+			return nil, index, fmt.Errorf("String length out of range")
+		}
+
+		return string(input[index : index+length]), index + length, nil
+	} else if prefix <= 0xbf {
+		lengthLength := int(prefix - 0xb7)
+		if index+lengthLength > len(input) {
+			return nil, index, fmt.Errorf("Length out of range")
+		}
+
+		length := bytesToInt(input[index : index+lengthLength])
+		index += lengthLength
+		if index+length > len(input) {
+			return nil, index, fmt.Errorf("String length out of range")
+		}
+
+		return string(input[index : index+length]), index + length, nil
+	} else if prefix <= 0xf7 {
+		length := int(prefix - 0xc0)
+		return decodeList(input, index, index+length)
+	} else {
+		lengthLength := int(prefix - 0xf7)
+		if index+lengthLength > len(input) {
+			return nil, index, fmt.Errorf("Length out of range")
+		}
+
+		length := bytesToInt(input[index : index+lengthLength])
+		index += lengthLength
+		return decodeList(input, index, index+length)
+	}
+}
+
+func decodeList(input []byte, index, end int) ([]interface{}, int, error) {
+	items := make([]interface{}, 0)
+
+	for index < end {
+		item, newIndex, err := decode(input, index)
+		if err != nil {
+			return nil, newIndex, err
+		}
+		items = append(items, item)
+		index = newIndex
+	}
+
+	return items, index, nil
+}
+
+func bytesToInt(bytes []byte) int {
+	result := 0
+	for _, b := range bytes {
+		result = (result << 8) + int(b)
+	}
+	return result
+}
+
+func main() {
+	items := []interface{}{
+		"cat",
+		[]interface{}{"puppy", "cow"},
+		"horse",
+		[]interface{}{[]interface{}{}},
+		"pig",
+		[]interface{}{""},
+		"sheep",
+	}
+
+	encoded := rlpSerialize(items)
+    decoded, err := rlpDecode(encoded)
+    if err != nil {
+		fmt.Printf("Error: %v\n", err)
+	} else {
+		fmt.Printf("Items: %v\nEncoded: %x\n Decoded: %v\n", items, encoded, decoded)
+	}
+
+    item := "hello, world"
+
+	encoded_single := rlpSerialize(item)
+    decoded_single, err := rlpDecode(encoded_single)
+    if err != nil {
+		fmt.Printf("Error: %v\n", err)
+	} else {
+		fmt.Printf("Items: %v\nEncoded: %x\n Decoded: %v\n", item, encoded_single, decoded_single)
+	}
+	
+}
+
+// func rlpDecodeUniversal(input1 string, inout2 string)
+
+func rlpCheckDecode(input1 string, input2 string) {
+    // check input2 = RLP-decode(input1))
 
 }
-    
-
-// Proposed structure
-// func encodeItem(string) - it takes in a single binary string and encodes it
-// func encodeList(list of strings) - takes in a list of items and encodes it
-// func verifyEncoding
-
-//encoding
-
-// For a single byte whose value is in the [0x00, 0x7f] (decimal [0, 127]) range, that byte is its own RLP encoding.
-
-
-// Otherwise, if a string is 0-55 bytes long, the RLP encoding consists of a single byte with value 0x80 (dec. 128) 
-// plus the length of the string followed by the string. The range of the first byte is thus [0x80, 0xb7] (dec. [128, 183]).
-
-
-// If a string is more than 55 bytes long, the RLP encoding consists of a single byte with value 0xb7 (dec. 183)
-//  plus the length in bytes of the length of the string in binary form, followed by the length of the string, 
-// followed by the string. For example, a 1024 byte long string would be encoded as \xb9\x04\x00 (dec. 185, 4, 0) 
-// followed by the string. Here, 0xb9 (183 + 2 = 185) as the first byte, followed by the 2 bytes 0x0400 (dec. 1024) that denote the length of the actual string.
-//  The range of the first byte is thus [0xb8, 0xbf] (dec. [184, 191]).
-
-
-// If the total payload of a list (i.e. the combined length of all its items being RLP encoded) is 0-55 bytes long, 
-// the RLP encoding consists of a single byte with value 0xc0 plus the length of the list followed by the concatenation of the RLP encodings of the items. 
-// The range of the first byte is thus [0xc0, 0xf7] (dec. [192, 247]).
-
-
-// If the total payload of a list is more than 55 bytes long, the RLP encoding consists of a single byte with value 0xf7 plus 
-// the length in bytes of the length of the payload in binary form, followed by the length of the payload, followed by the 
-// concatenation of the RLP encodings of the items. The range of the first byte is thus [0xf8, 0xff] (dec. [248, 255]).
-
