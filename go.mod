@@ -7,7 +7,7 @@ require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark v0.8.0 // indirect
-	github.com/consensys/gnark-crypto v0.10.0 // indirect
+	github.com/consensys/gnark-crypto v0.9.1 // indirect
 	github.com/ethereum/go-ethereum v1.11.6 // indirect
 	github.com/fxamacker/cbor/v2 v2.4.0 // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect

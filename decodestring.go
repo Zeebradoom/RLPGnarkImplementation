@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/backend/groth16"
@@ -17,15 +18,11 @@ type DecodingCircuit struct {
 
 func (circuit *DecodingCircuit) Define(api frontend.API) error {
 	//get most significant, hex bit that tells us the length of the bits
-	var bits[] frontend.Variable = api.ToBinary(circuit.X, 8)
-	var prefix frontend.Variable = api.FromBinary(bits)
-	// for i := 7; i >= 0; i-- {
-	// 	num = num + string(api.FromBinary(bits[i]))
-	// }
-	//prefix := strconv.ParseInt(num, 2, 8)
+	bits := api.ToBinary(circuit.X, 8)
+	prefix := api.FromBinary(bits[:]...)
 
-	var bound_bits[] frontend.Variable = api.ToBinary(0x7f)
-	var bound frontend.Variable = api.FromBinary(bound_bits)
+	bound_bits := api.ToBinary(0x7f)
+	bound := api.FromBinary(bound_bits[:]...)
 
 	api.AssertIsLessOrEqual(prefix, bound)
 	api.AssertIsEqual(circuit.Y, prefix)
@@ -34,8 +31,6 @@ func (circuit *DecodingCircuit) Define(api frontend.API) error {
 	// } else{
 		return nil
 	// }
-	
-	
 }
 
 func main() {
@@ -47,13 +42,16 @@ func main() {
 	pk, vk, _ := groth16.Setup(ccs)
 
 	// // witness definition
-	assignment := DecodingCircuit{X: 0x7f2351, Y: 0x7f}
+	assignment := DecodingCircuit{X: 0x7f, Y: 0x7f}
 	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
+	fmt.Printf("Witness: %v\n", witness)
 	publicWitness, _ := witness.Public()
 
 	// // groth16: Prove & Verify
 	proof, _ := groth16.Prove(ccs, pk, witness)
 	groth16.Verify(proof, vk, publicWitness)
+
+	fmt.Printf("Main works")
 
 }
 

@@ -1,26 +1,53 @@
+package main
+
 import (
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/hash/mimc"
+	"github.com/consensys/gnark/frontend/cs/r1cs"
 )
 
-
-type DecodingCircuit struct {
+// CubicCircuit defines a simple circuit
+// x**3 + x + 5 == y
+type CubicCircuit struct {
 	// struct tags on a variable is optional
 	// default uses variable name and secret visibility.
-	X frontend.Variable `gnark:"encoded"`
-	Y frontend.Variable `gnark:"decoded"`
+	X frontend.Variable `gnark:"x"`
+	Y frontend.Variable `gnark:",public"`
 }
 
-func (circuit *DecodingCircuit) Define(api frontend.API) error {
+// Define declares the circuit constraints
+// x**3 + x + 5 == y
+func (circuit *CubicCircuit) Define(api frontend.API) error {
 	x3 := api.Mul(circuit.X, circuit.X, circuit.X)
 	api.AssertIsEqual(circuit.Y, api.Add(x3, circuit.X, 5))
 	return nil
 }
 
+func main() {
+	// compiles our circuit into a R1CS
+	var circuit CubicCircuit
+	ccs, _ := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
 
-// type Circuit interface {
-//     // Define declares the circuit's Constraints
-//     Define(api frontend.API) error
-// }
 
+	// // groth16 zkSNARK: Setup
+	pk, vk, _ := groth16.Setup(ccs)
+
+	// // witness definition
+	assignment := CubicCircuit{X: 3, Y: 35}
+	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
+	publicWitness, _ := witness.Public()
+
+	// // 1. One time setup
+	// publicData, _ := plonk.Setup(cs, ...) // WIP
+
+	// // 2. Proof creation
+	// proof, err := plonk.Prove(r1cs, publicData, witness)
+
+	// // 3. Proof verification
+	// err := plonk.Verify(proof, publicData, publicWitness)
+
+	// // groth16: Prove & Verify
+	proof, _ := groth16.Prove(ccs, pk, witness)
+	groth16.Verify(proof, vk, publicWitness)
+}
