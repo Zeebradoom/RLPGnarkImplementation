@@ -17,20 +17,32 @@ type DecodingCircuit struct {
 } 
 
 func (circuit *DecodingCircuit) Define(api frontend.API) error {
-	//get most significant, hex bit that tells us the length of the bits
+	//get the prefix
 	bits := api.ToBinary(circuit.X, 8)
 	prefix := api.FromBinary(bits[:]...)
 
+	// bound is a bound for a [0:127]
 	bound_bits := api.ToBinary(0x7f)
 	bound := api.FromBinary(bound_bits[:]...)
+	
+	compare := api.Cmp(prefix, bound)
+	//fmt.Printf("Compare: %v\n", compare)
+	is_equal := api.IsZero(compare)
 
+	one_bits := api.ToBinary(0x01)
+	one := api.FromBinary(one_bits[:]...)
+	
+	diff := api.Sub(compare, one)
+	is_less := api.IsZero(diff)
+
+	check := api.Or(is_equal, is_less)
+	//check
+
+	api.AssertIsEqual(check, one)
 	api.AssertIsLessOrEqual(prefix, bound)
 	api.AssertIsEqual(circuit.Y, prefix)
-	// if cond {
-		// return api.AssertIsEqual(circuit.Y, prefix)
-	// } else{
-		return nil
-	// }
+
+	return nil
 }
 
 func main() {
@@ -42,7 +54,7 @@ func main() {
 	pk, vk, _ := groth16.Setup(ccs)
 
 	// // witness definition
-	assignment := DecodingCircuit{X: 0x7f, Y: 0x7f}
+	assignment := DecodingCircuit{X: 0x07, Y: 0x07}
 	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
 	fmt.Printf("Witness: %v\n", witness)
 	publicWitness, _ := witness.Public()
@@ -59,8 +71,6 @@ func main() {
 // prefix := input[index]
 // index++
 
-// if prefix <= 0x7f {
-// 	return string([]byte{prefix}), index, nil
 // } else if prefix <= 0xb7 {
 // 	length := int(prefix - 0x80)
 // 	if index+length > len(input) {
@@ -81,3 +91,10 @@ func main() {
 // 	}
 
 // 	return string(input[index : index+length]), index + length, nil
+
+
+
+
+// if_same := api.cmp()
+	//bound_less_than_183_bits := api.ToBinary(0xb7)
+	//bound_less_than_183 := api.FromBinary(bound_less_than_183_bits[:]...)

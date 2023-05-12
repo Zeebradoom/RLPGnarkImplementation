@@ -187,5 +187,5 @@ func main() {
 
 func rlpCheckDecode(input1 string, input2 string) {
     // check input2 = RLP-decode(input1))
-
+    
 }
