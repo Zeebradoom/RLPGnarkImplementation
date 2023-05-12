@@ -6,7 +6,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
-	"github.com/consensys/gnark/frontend/cs"
+	"github.com/liyue201/gnark-circomlib/blob/main/circuits/multiplexer.go"
 )
 
 type EncodingCircuit struct {
@@ -133,35 +133,32 @@ func (circuit *DecodingCircuit) ArrayEq(api frontend.API) error {
 
 }
 
-func ArrayEq(api frontend.API,a, b []frontend.Variable, inLen frontend.Variable, nIn int) error {
+func ArrayEq(api frontend.API,circuit multiplexer, a, b []frontend.Variable, inLen frontend.Variable, nIn int) error {
 	api.AssertIsLessOrEqual(inLen, 252)
 	api.AssertIsLessOrEqual(nIn, 252) //is 252 in integer or bits?
 	
 	matchSum := make([]frontend.Variable, nIn)
 
 	for idx := 0; idx < nIn; idx++ {
-		i := api.Sub(a[idx]-b[idx])
+		i := api.SUB(a[idx]-b[idx])
 
 		if idx == 0 {
 			matchSum[idx].Equal(i)
 		} else {
-			cs.Add(matchSum[idx], matchSum[idx-1], i)
+			api.ADD(matchSum[idx], matchSum[idx-1], i)
 		}
 	}
 
-	matchChooser := cs.NewMultiplexer
-	NewMultiplexer(1, nIn+1)
-	matchChooser.Inp[0][0].Equal(0)
+	matchChooser := circuit.Multiplexer(1, nIn+1)
+	matchChooser[0][0] := 0 //not sure, theres no documentation
+
 	for idx := 0; idx < nIn; idx++ {
-		matchChooser.Inp[idx+1][0].Equal(matchSum[idx])
+		matchChooser[idx+1][0]:= matchSum[idx]
 	}
-	matchChooser.Sel.Equal(inLen)
+	// matchChooser.Sel := inLen //idk
 
-	matchCheck := cs.NewIsEqual()
-	matchCheck.In[0].Equal(matchChooser.Out[0])
-	matchCheck.In[1].Equal(inLen)
-
-	return matchCheck.Out
+	matchCheck := api.sub(matchChooser[0], inLen)
+	return api.IsZero(matchCheck)
 }
 
 

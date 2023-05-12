@@ -20,7 +20,7 @@ func ArrayEq(api frontend.API, a, b []frontend.Variable, inLen frontend.Variable
 		}
 	}
 
-	matchChooser, err  := Multiplexer(api, matchSum, inLen, nIn)
+	matchChooser:= Multiplexer( matchSum, inLen)
 	// matchChooser[0][0] := 0 //not sure, theres no documentation
 
 	for idx := 0; idx < nIn; idx++ {
